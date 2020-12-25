@@ -8,16 +8,16 @@ import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
 import Data.Aeson
 
-import qualified Network.URI as N
-import qualified Network.HTTP.Client as N
+import Network.URI
+import Network.HTTP.Client
 
 import Control.Applicative
 
 data Config = Config
-  { connectionManager :: N.Manager
+  { connectionManager :: Manager
   }
 
-type Work a = Config -> IO a
+type Fetch a = Config -> (Response BodyReader -> IO a) -> IO a
 
 type GalleryId = Int
 
@@ -94,10 +94,10 @@ galleryBlockUrl gid = "ltn.hitomi.la/galleryblock/" ++ show gid ++ ".html"
 
 galleryIntroUrl :: GalleryInfo -> String
 galleryIntroUrl GalleryInfo{_id=gid, _title=gtitle, _type=gtype, _language_localname=glang} =
-  N.escapeURIString p $
+  escapeURIString p $
     "hitomi.la/" ++ T.unpack gtype ++ "/" ++ replace (T.unpack gtitle ++ "-" ++ T.unpack glang) ++ "-" ++ show gid ++ ".html"
   where
-    p x = N.isAllowedInURI x || x == '|'
+    p x = isAllowedInURI x || x == '|'
     replace [] = []
     replace (x:xs)
       | x == ' '              = '-' : replace xs
@@ -122,23 +122,23 @@ galleryImageUrl ImageInfo{name=name, hash=hash}
         g = hex x * 16 + hex y
         d = if g < 0x30 then 2 else 3
 
-fetchGalleryInfo :: GalleryId -> Work (N.Response BSL.ByteString)
-fetchGalleryInfo gid config = do
-  request <- N.parseRequest $ "https://" ++ galleryInfoUrl gid
-  N.httpLbs request (connectionManager config)
+fetchGalleryInfo :: GalleryId -> Fetch a
+fetchGalleryInfo gid config reader = do
+  request <- parseRequest $ "https://" ++ galleryInfoUrl gid
+  withResponse request (connectionManager config) reader
 
-fetchGalleryBlock :: GalleryId -> Work (N.Response BSL.ByteString)
-fetchGalleryBlock gid config = do
-  request <- N.parseRequest $ "https://" ++ galleryBlockUrl gid
-  N.httpLbs request (connectionManager config)
+fetchGalleryBlock :: GalleryId -> Fetch a
+fetchGalleryBlock gid config reader = do
+  request <- parseRequest $ "https://" ++ galleryBlockUrl gid
+  withResponse request (connectionManager config) reader
 
-fetchGalleryImage :: GalleryInfo -> ImageInfo -> (N.Response N.BodyReader -> IO a) -> Work a
-fetchGalleryImage ginfo iinfo reader config = do
-  _request <- N.parseRequest $ "https://" ++ galleryImageUrl iinfo
-  let request = _request  { N.requestHeaders = headers
-                          , N.responseTimeout = N.responseTimeoutMicro 60000000
+fetchGalleryImage :: GalleryInfo -> ImageInfo -> Fetch a
+fetchGalleryImage ginfo iinfo config reader = do
+  _request <- parseRequest $ "https://" ++ galleryImageUrl iinfo
+  let request = _request  { requestHeaders = headers
+                          , responseTimeout = responseTimeoutMicro 60000000
                           }
-  N.withResponse request (connectionManager config) reader
+  withResponse request (connectionManager config) reader
   where
     headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
 
