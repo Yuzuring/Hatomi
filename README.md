@@ -1,0 +1,2 @@
+# Hatomi
+Haskell hitomi manager
