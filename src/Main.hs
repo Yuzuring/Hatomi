@@ -69,20 +69,41 @@ readGalleryInfo res = do
   let Just info = parseGalleryInfo . BSL.fromChunks $ bss
   return info
 
+downloadGallery :: GalleryId -> DownloadManager -> IO ()
+downloadGallery gid man = do
+  homedir <- getHomeDirectory
+  createDirectoryIfMissing True (homedir ++ "/hatomi/" ++ show gid)
+  info <- fetchGalleryInfo gid man readGalleryInfo
+  forM_ (_files info) $ \imginfo -> do
+    mp <- newEmptyMVar
+    aprogressBar <- async (progressBar mp)
+    img <- fetchGalleryImage info imginfo man (readGalleryImage mp)
+    cancel aprogressBar
+    putChar '\n'
+    BSL.writeFile (homedir ++ "/hatomi/" ++ show gid ++ "/" ++ (T.unpack . name) imginfo) img
+  where
+    progressBar :: MVar Progress -> IO ()
+    progressBar mp = do
+      Progress t x r <- takeMVar mp
+      Just (TS.Window h w) <- TS.size
+      let n = x * (w-2) `div` t
+      putStr "\r["
+      putStr $ replicate n '#'
+      putStr $ replicate (w-n-2) ' '
+      putChar ']'
+      hFlush stdout
+      progressBar mp
+
 main :: IO ()
 main = flip runContT pure . callCC $ \k ->
   let exit = absurd <$> k ()
   in do
-  _home <- liftIO $ lookupEnv "HOME"
-  homeDir <- case _home of
-    Nothing -> do
-      liftIO $ putStrLn "no $HOME"
-      exit
-    Just homeDir -> pure homeDir
+  homeDir <- liftIO $ getHomeDirectory
 
-  hasConfigFile <- liftIO $ doesFileExist (homeDir ++ "/.config/hatomirc")
+  xdgConfigDir <- liftIO $ getXdgDirectory XdgConfig ""
+  hasConfigFile <- liftIO $ doesFileExist (xdgConfigDir ++ "/hatomirc")
   unless hasConfigFile $ do
-    liftIO $ putStrLn "no ~/.config/hatomirc"
+    liftIO $ putStrLn "no config file"
     exit
 
   args <- liftIO getArgs
@@ -92,29 +113,6 @@ main = flip runContT pure . callCC $ \k ->
   
   liftIO $ do
     manager <- newManager tlsManagerSettings
-    let config = Config manager
-        gid = read (head args) :: GalleryId
-    
-    mvar <- newEmptyMVar
-    aprint <- async (printer mvar)
-
-    info <- fetchGalleryInfo gid config readGalleryInfo
-    aimg <- async $ fetchGalleryImage info (_files info !! 0) config (readGalleryImage mvar)
-    img <- wait aimg
-    cancel aprint    
-
-    createDirectoryIfMissing True (homeDir ++ "/hatomi/" ++ show gid)
-    BSL.writeFile (homeDir ++ "/hatomi/" ++ show gid ++ "/" ++ (T.unpack . name) (_files info !! 0)) img
-    return ()
-  where
-    printer :: MVar Progress -> IO ()
-    printer mvar = do
-      Progress t x r <- takeMVar mvar
-      Just (TS.Window h w) <- TS.size
-      let n = x * (w-2) `div` t
-      putStr "\r["
-      putStr $ replicate n '#'
-      putStr $ replicate (w-n-2) ' '
-      putChar ']'
-      hFlush stdout
-      printer mvar
+    let man = DownloadManager manager
+        gid = read (args !! 0) 
+    downloadGallery gid man 

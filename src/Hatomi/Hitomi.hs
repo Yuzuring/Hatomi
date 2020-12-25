@@ -13,11 +13,11 @@ import Network.HTTP.Client
 
 import Control.Applicative
 
-data Config = Config
+data DownloadManager = DownloadManager
   { connectionManager :: Manager
   }
 
-type Fetch a = Config -> (Response BodyReader -> IO a) -> IO a
+type Fetch a = DownloadManager -> (Response BodyReader -> IO a) -> IO a
 
 type GalleryId = Int
 
@@ -123,22 +123,22 @@ galleryImageUrl ImageInfo{name=name, hash=hash}
         d = if g < 0x30 then 2 else 3
 
 fetchGalleryInfo :: GalleryId -> Fetch a
-fetchGalleryInfo gid config reader = do
+fetchGalleryInfo gid man reader = do
   request <- parseRequest $ "https://" ++ galleryInfoUrl gid
-  withResponse request (connectionManager config) reader
+  withResponse request (connectionManager man) reader
 
 fetchGalleryBlock :: GalleryId -> Fetch a
-fetchGalleryBlock gid config reader = do
+fetchGalleryBlock gid man reader = do
   request <- parseRequest $ "https://" ++ galleryBlockUrl gid
-  withResponse request (connectionManager config) reader
+  withResponse request (connectionManager man) reader
 
 fetchGalleryImage :: GalleryInfo -> ImageInfo -> Fetch a
-fetchGalleryImage ginfo iinfo config reader = do
+fetchGalleryImage ginfo iinfo man reader = do
   _request <- parseRequest $ "https://" ++ galleryImageUrl iinfo
   let request = _request  { requestHeaders = headers
                           , responseTimeout = responseTimeoutMicro 60000000
                           }
-  withResponse request (connectionManager config) reader
+  withResponse request (connectionManager man) reader
   where
     headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
 
