@@ -27,7 +27,8 @@ import Control.Concurrent.MVar
 import Control.Concurrent.Async
 
 import Hatomi
-import Hatomi.Hitomi
+import qualified Hatomi.Hitomi as Hitomi
+import Hatomi.Hitomi (fetchGalleryInfo, fetchGalleryImage, parseGalleryInfo)
 
 data Progress = Progress
   { total :: !Int     -- total size       (bytes)
@@ -65,7 +66,7 @@ readGalleryImage mvar res = do
     Just _contentLength = lookup "Content-Length" headers
     contentLength = read . BSC.unpack $ _contentLength
 
-readGalleryInfo :: Response BodyReader -> IO GalleryInfo
+readGalleryInfo :: Response BodyReader -> IO Hitomi.GalleryInfo
 readGalleryInfo res = do
   bss <- brConsume (responseBody res)
   let Just info = parseGalleryInfo . BSL.fromChunks $ bss
@@ -77,14 +78,14 @@ downloadGallery gid man = do
   let galleryDirectory = hatomiDirectory man ++ "/" ++ show gid
   createDirectoryIfMissing True galleryDirectory
   info <- fetchGalleryInfo gid man readGalleryInfo
-  let imgNum = length (_files info)
-  iforM_ (_files info) $ \i imginfo -> do
+  let imgNum = length (Hitomi._files info)
+  iforM_ (Hitomi._files info) $ \i imginfo -> do
     putStrLn ("[" ++ show (i+1) ++ " of " ++ show imgNum ++ "]")
     mp <- newEmptyMVar
     aimg <- async $ fetchGalleryImage info imginfo man (readGalleryImage mp)
     progressBar mp
     img <- wait aimg
-    BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . name) imginfo) img
+    BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hitomi.name) imginfo) img
   where
     progressBar :: MVar Progress -> IO ()
     progressBar mp = do
