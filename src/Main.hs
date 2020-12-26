@@ -58,7 +58,7 @@ readGalleryImage mvar res = do
         putMVar mvar p'
         go t' p' (c:cs)
       else
-        return $ foldl' (\s c -> BSL.Chunk c s) BSL.Empty cs
+        return $ foldl' (flip BSL.Chunk) BSL.Empty cs
       
     status      = responseStatus res
     headers     = responseHeaders res
@@ -107,7 +107,7 @@ main :: IO ()
 main = flip runContT pure . callCC $ \k ->
   let exit = absurd <$> k ()
   in do
-  homeDir <- liftIO $ getHomeDirectory
+  homeDir <- liftIO getHomeDirectory
 
   xdgConfigDir <- liftIO $ getXdgDirectory XdgConfig ""
   hasConfigFile <- liftIO $ doesFileExist (xdgConfigDir ++ "/hatomirc")
@@ -123,5 +123,5 @@ main = flip runContT pure . callCC $ \k ->
   liftIO $ do
     manager <- newManager tlsManagerSettings
     let man = HatomiManager (homeDir ++ "/hatomi") manager
-        gid = read (args !! 0) 
+        gid = read (head args) 
     downloadHitomiGallery gid man 

@@ -106,7 +106,7 @@ instance Site Hitomi where
     { Hatomi._id          = _id x
     , Hatomi._title       = _title x
     , Hatomi._group       = ""
-    , Hatomi._type        = flip (findWithDefault Hatomi.Misc) Hatomi.galleryTypeMap (_type x)
+    , Hatomi._type        = findWithDefault Hatomi.Misc (_type x) Hatomi.galleryTypeMap
     , Hatomi._language    = _language x
     , Hatomi._series      = ""
     , Hatomi._characters  = []
