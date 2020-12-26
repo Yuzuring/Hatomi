@@ -8,6 +8,7 @@ import Data.Char
 import Data.String
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
+import Data.HashMap.Strict hiding (map)
 import Data.Aeson
 
 import Network.URI
@@ -21,10 +22,7 @@ import Hatomi.Site
 
 type GalleryType = T.Text
 
-data Tag = Male   T.Text
-         | Female T.Text
-         | Unisex T.Text
-         deriving Show
+newtype Tag = Tag {toHatomiTag :: Hatomi.Tag} deriving Show
 
 data GalleryBlock = GalleryBlock deriving Show
 
@@ -40,17 +38,17 @@ instance FromJSON (ImageInfo Hitomi) where
 
 instance FromJSON Tag where
   parseJSON = withObject "ImageInfo" $ \v ->
-    (sex v <|> pure Unisex) <*> v .: "tag"
+    Tag <$> ((sex v <|> pure Hatomi.Unisex) <*> v .: "tag")
     where
       sex v = do
         male    <- v .: "male"
         female  <- v .: "female"
         if (male == String "1" || male == Number 1) && female == String "" then
-          pure Male
+          pure Hatomi.Male
         else if male == String "" && (female == String "1" || female == Number 1) then
-          pure Female
+          pure Hatomi.Female
         else
-          pure Unisex
+          pure Hatomi.Unisex
 
 instance FromJSON (GalleryInfo Hitomi) where
   parseJSON = withObject "GalleryInfo" $ \v ->
@@ -103,7 +101,18 @@ instance Site Hitomi where
       headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
 
   imageInfos GalleryInfo{_files=fs} = fs
-  toHatomiGalleryInfo = error "toHatomiGalleryInfo @Hitomi : not implemented"
+  toHatomiGalleryInfo x =
+    Hatomi.GalleryInfo
+    { Hatomi._id          = _id x
+    , Hatomi._title       = _title x
+    , Hatomi._group       = ""
+    , Hatomi._type        = flip (findWithDefault Hatomi.Misc) Hatomi.galleryTypeMap (_type x)
+    , Hatomi._language    = _language x
+    , Hatomi._series      = ""
+    , Hatomi._characters  = []
+    , Hatomi._tags        = map toHatomiTag (_tags x)
+    , Hatomi._files       = map toHatomiImageInfo (_files x)
+    }
   toHatomiImageInfo ImageInfo{name=name, hash=hash} = Hatomi.ImageInfo name hash
 
 galleryInfoUrl :: GalleryId -> String

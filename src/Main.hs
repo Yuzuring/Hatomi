@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
+
 module Main where
 
 import Data.Void
@@ -10,6 +11,7 @@ import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy         as BSL
 import qualified Data.ByteString.Lazy.Internal as BSL (ByteString(..))
 import qualified Data.Text as T
+import Data.Aeson
 
 import System.IO
 import System.Environment
@@ -99,6 +101,7 @@ downloadHitomiGallery gid man = do
     progressBar mp
     img <- wait aimg
     BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hatomi.name . toHatomiImageInfo) iinfo) img
+  BSL.writeFile (galleryDirectory ++ "/meta.json") (encode $ toHatomiGalleryInfo ginfo)
 
 main :: IO ()
 main = flip runContT pure . callCC $ \k ->

@@ -54,21 +54,22 @@ data GalleryInfo = GalleryInfo
   , _files      :: [ImageInfo]
   } deriving Show
 
+galleryTypeMap :: HashMap T.Text GalleryType
+galleryTypeMap = fromList
+  [ ("doujinshi"  , Doujinshi )
+  , ("manga"      , Manga     )
+  , ("artistcg"   , ArtistCG  )
+  , ("gamecg"     , GameCG    )
+  , ("western"    , Western   )
+  , ("non-h"      , NonH      )
+  , ("imageset"   , ImageSet  )
+  , ("cosplay"    , Cosplay   )
+  , ("asianporn"  , AsianPorn )
+  , ("misc"       , Misc      )
+  ]
+
 instance FromJSON GalleryType where
-  parseJSON = withText "GalleryType" $ pure . flip (findWithDefault Misc) mapping
-    where
-      mapping = fromList
-        [ ("doujinshi"  , Doujinshi )
-        , ("manga"      , Manga     )
-        , ("artistcg"   , ArtistCG  )
-        , ("gamecg"     , GameCG    )
-        , ("western"    , Western   )
-        , ("non-h"      , NonH      )
-        , ("imageset"   , ImageSet  )
-        , ("cosplay"    , Cosplay   )
-        , ("asianporn"  , AsianPorn )
-        , ("misc"       , Misc      )
-        ]
+  parseJSON = withText "GalleryType" $ pure . flip (findWithDefault Misc) galleryTypeMap
 
 instance ToJSON GalleryType where
   toJSON = \case
