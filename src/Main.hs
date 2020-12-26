@@ -4,6 +4,7 @@ module Main where
 
 import Data.Void
 import Data.List
+import Data.List.Index
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy         as BSL
@@ -72,15 +73,17 @@ readGalleryInfo res = do
 
 downloadGallery :: GalleryId -> HatomiManager -> IO ()
 downloadGallery gid man = do
+  putStrLn ("Downloading " ++ show gid)
   let galleryDirectory = hatomiDirectory man ++ "/" ++ show gid
   createDirectoryIfMissing True galleryDirectory
   info <- fetchGalleryInfo gid man readGalleryInfo
-  forM_ (_files info) $ \imginfo -> do
+  let imgNum = length (_files info)
+  iforM_ (_files info) $ \i imginfo -> do
+    putStrLn ("[" ++ show (i+1) ++ " of " ++ show imgNum ++ "]")
     mp <- newEmptyMVar
-    aprogressBar <- async (progressBar mp)
-    img <- fetchGalleryImage info imginfo man (readGalleryImage mp)
-    cancel aprogressBar
-    putChar '\n'
+    aimg <- async $ fetchGalleryImage info imginfo man (readGalleryImage mp)
+    progressBar mp
+    img <- wait aimg
     BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . name) imginfo) img
   where
     progressBar :: MVar Progress -> IO ()
@@ -92,8 +95,12 @@ downloadGallery gid man = do
       putStr $ replicate n '#'
       putStr $ replicate (w-n-2) ' '
       putChar ']'
-      hFlush stdout
-      progressBar mp
+      if t == x then do
+        putChar '\n'
+        hFlush stdout
+      else do
+        hFlush stdout
+        progressBar mp
 
 main :: IO ()
 main = flip runContT pure . callCC $ \k ->

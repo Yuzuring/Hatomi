@@ -7,6 +7,7 @@ let
     terminal-size
     clock
     async
+    ilist
   ];
   ghc = pkgs.ghc.withPackages haskellPackages;
 in
