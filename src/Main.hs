@@ -25,6 +25,7 @@ import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import Control.Concurrent.Async
 
+import Hatomi
 import Hatomi.Hitomi
 
 data Progress = Progress
@@ -69,10 +70,10 @@ readGalleryInfo res = do
   let Just info = parseGalleryInfo . BSL.fromChunks $ bss
   return info
 
-downloadGallery :: GalleryId -> DownloadManager -> IO ()
+downloadGallery :: GalleryId -> HatomiManager -> IO ()
 downloadGallery gid man = do
-  homedir <- getHomeDirectory
-  createDirectoryIfMissing True (homedir ++ "/hatomi/" ++ show gid)
+  let galleryDirectory = hatomiDirectory man ++ "/" ++ show gid
+  createDirectoryIfMissing True galleryDirectory
   info <- fetchGalleryInfo gid man readGalleryInfo
   forM_ (_files info) $ \imginfo -> do
     mp <- newEmptyMVar
@@ -80,7 +81,7 @@ downloadGallery gid man = do
     img <- fetchGalleryImage info imginfo man (readGalleryImage mp)
     cancel aprogressBar
     putChar '\n'
-    BSL.writeFile (homedir ++ "/hatomi/" ++ show gid ++ "/" ++ (T.unpack . name) imginfo) img
+    BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . name) imginfo) img
   where
     progressBar :: MVar Progress -> IO ()
     progressBar mp = do
@@ -113,6 +114,6 @@ main = flip runContT pure . callCC $ \k ->
   
   liftIO $ do
     manager <- newManager tlsManagerSettings
-    let man = DownloadManager manager
+    let man = HatomiManager (homeDir ++ "/hatomi") manager
         gid = read (args !! 0) 
     downloadGallery gid man 
