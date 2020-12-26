@@ -8,6 +8,7 @@ let
     clock
     async
     ilist
+    unordered-containers
   ];
   ghc = pkgs.ghc.withPackages haskellPackages;
 in
