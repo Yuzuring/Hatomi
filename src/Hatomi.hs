@@ -3,7 +3,8 @@
 
 module Hatomi where
 
-import Data.Text as T
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Text as T
 import Data.Aeson
 
 import Control.Applicative
@@ -16,8 +17,6 @@ data HatomiManager = HatomiManager
   { hatomiDirectory   :: FilePath
   , connectionManager :: Manager
   }
-
-type Fetch a = HatomiManager -> (Response BodyReader -> IO a) -> IO a
 
 type GalleryId = Int
 
@@ -137,3 +136,4 @@ instance ToJSON GalleryInfo where
     , "tags"        .= _tags        x
     , "files"       .= _files       x
     ]
+

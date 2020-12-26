@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
 
-module Hatomi.Hitomi where
+module Hatomi.Site.Hitomi where
 
 import Data.Char
 import Data.String
@@ -13,39 +15,20 @@ import Network.HTTP.Client
 
 import Control.Applicative
 
-import qualified Hatomi as H
-import Hatomi (Fetch, GalleryId, HatomiManager(..))
+import qualified Hatomi as Hatomi
+import Hatomi (GalleryId)
+import Hatomi.Site
 
 type GalleryType = T.Text
-
-data ImageInfo = ImageInfo
-  { name    :: T.Text
-  , hash    :: T.Text
-  , width   :: Int
-  , height  :: Int
-  , haswebp :: Bool
-  , hasavif :: Bool
-  } deriving Show
 
 data Tag = Male   T.Text
          | Female T.Text
          | Unisex T.Text
          deriving Show
 
-data GalleryInfo = GalleryInfo
-  { _id         :: GalleryId
-  , _title      :: T.Text
-  , _type       :: GalleryType
-  , _files      :: [ImageInfo]
-  , _language   :: T.Text
-  , _language_localname :: T.Text
-  , _tags       :: [Tag]
-  , _date       :: T.Text
-  } deriving Show
-
 data GalleryBlock = GalleryBlock deriving Show
 
-instance FromJSON ImageInfo where
+instance FromJSON (ImageInfo Hitomi) where
   parseJSON = withObject "ImageInfo" $ \v ->
     ImageInfo
     <$> (v .: "name"    <|> pure "")
@@ -69,7 +52,7 @@ instance FromJSON Tag where
         else
           pure Unisex
 
-instance FromJSON GalleryInfo where
+instance FromJSON (GalleryInfo Hitomi) where
   parseJSON = withObject "GalleryInfo" $ \v ->
     GalleryInfo
     <$> ((read :: String -> GalleryId) <$> v .: "id")
@@ -81,13 +64,55 @@ instance FromJSON GalleryInfo where
     <*> (v .: "tags"      <|> pure [])
     <*> (v .: "date"      <|> pure "")
 
+data Hitomi
+
+instance Site Hitomi where
+  data GalleryInfo Hitomi = GalleryInfo
+    { _id         :: GalleryId
+    , _title      :: T.Text
+    , _type       :: GalleryType
+    , _files      :: [ImageInfo Hitomi]
+    , _language   :: T.Text
+    , _language_localname :: T.Text
+    , _tags       :: [Tag]
+    , _date       :: T.Text
+    } deriving Show
+
+  data ImageInfo Hitomi = ImageInfo
+    { name    :: T.Text
+    , hash    :: T.Text
+    , width   :: Int
+    , height  :: Int
+    , haswebp :: Bool
+    , hasavif :: Bool
+    } deriving Show
+
+  downloadGalleryInfo gid fetch = do
+    req <- parseRequest $ "https://" ++ galleryInfoUrl gid
+    res <- fetch req
+    let Just x = parseGalleryInfo res
+    pure x
+
+  downloadGalleryImage ginfo iinfo fetch = do
+      _req <- parseRequest $ "https://" ++ galleryImageUrl iinfo
+      let req = _req { requestHeaders = headers
+                     , responseTimeout = responseTimeoutMicro 60000000
+                     }
+      fetch req
+    where
+      headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
+
+  imageInfos GalleryInfo{_files=fs} = fs
+  toHatomiGalleryInfo = error "toHatomiGalleryInfo @Hitomi : not implemented"
+  toHatomiImageInfo ImageInfo{name=name, hash=hash} = Hatomi.ImageInfo name hash
+
 galleryInfoUrl :: GalleryId -> String
 galleryInfoUrl gid = "ltn.hitomi.la/galleries/" ++ show gid ++ ".js"
 
 galleryBlockUrl :: GalleryId -> String
 galleryBlockUrl gid = "ltn.hitomi.la/galleryblock/" ++ show gid ++ ".html"
 
-galleryIntroUrl :: GalleryInfo -> String
+galleryIntroUrl :: GalleryInfo Hitomi -> String
 galleryIntroUrl GalleryInfo{_id=gid, _title=gtitle, _type=gtype, _language_localname=glang} =
   escapeURIString p $
     "hitomi.la/" ++ T.unpack gtype ++ "/" ++ replace (T.unpack gtitle ++ "-" ++ T.unpack glang) ++ "-" ++ show gid ++ ".html"
@@ -99,7 +124,7 @@ galleryIntroUrl GalleryInfo{_id=gid, _title=gtitle, _type=gtype, _language_local
       | 'A' <= x && x <= 'Z'  = toLower x : replace xs
       | otherwise             = x : replace xs
 
-galleryImageUrl :: ImageInfo -> String
+galleryImageUrl :: ImageInfo Hitomi -> String
 galleryImageUrl ImageInfo{name=name, hash=hash}
   | [x,y,z] <- T.unpack . T.takeEnd 3 $ hash
     = sub x y:"" ++ "b.hitomi.la/images/" ++ z:'/':x:y:"/" ++ T.unpack hash ++ "." ++ ext
@@ -117,31 +142,8 @@ galleryImageUrl ImageInfo{name=name, hash=hash}
         g = hex x * 16 + hex y
         d = if g < 0x30 then 2 else 3
 
-fetchGalleryInfo :: GalleryId -> Fetch a
-fetchGalleryInfo gid man reader = do
-  request <- parseRequest $ "https://" ++ galleryInfoUrl gid
-  withResponse request (connectionManager man) reader
-
-fetchGalleryBlock :: GalleryId -> Fetch a
-fetchGalleryBlock gid man reader = do
-  request <- parseRequest $ "https://" ++ galleryBlockUrl gid
-  withResponse request (connectionManager man) reader
-
-fetchGalleryImage :: GalleryInfo -> ImageInfo -> Fetch a
-fetchGalleryImage ginfo iinfo man reader = do
-  _request <- parseRequest $ "https://" ++ galleryImageUrl iinfo
-  let request = _request  { requestHeaders = headers
-                          , responseTimeout = responseTimeoutMicro 60000000
-                          }
-  withResponse request (connectionManager man) reader
-  where
-    headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
-
-parseGalleryInfo :: BSL.ByteString -> Maybe GalleryInfo
+parseGalleryInfo :: BSL.ByteString -> Maybe (GalleryInfo Hitomi)
 parseGalleryInfo = decode' . BSL.tail . BSL.dropWhile (/=c)
   where
     c = fromIntegral $ ord '='
-
-parseGalleryBlock :: BSL.ByteString -> Maybe GalleryBlock
-parseGalleryBlock _ = Nothing
 

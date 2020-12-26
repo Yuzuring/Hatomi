@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+{-# LANGUAGE TypeApplications  #-}
 module Main where
 
 import Data.Void
@@ -27,8 +27,8 @@ import Control.Concurrent.MVar
 import Control.Concurrent.Async
 
 import Hatomi
-import qualified Hatomi.Hitomi as Hitomi
-import Hatomi.Hitomi (fetchGalleryInfo, fetchGalleryImage, parseGalleryInfo)
+import Hatomi.Site
+import Hatomi.Site.Hitomi (Hitomi)
 
 data Progress = Progress
   { total :: !Int     -- total size       (bytes)
@@ -66,42 +66,39 @@ readGalleryImage mvar res = do
     Just _contentLength = lookup "Content-Length" headers
     contentLength = read . BSC.unpack $ _contentLength
 
-readGalleryInfo :: Response BodyReader -> IO Hitomi.GalleryInfo
-readGalleryInfo res = do
-  bss <- brConsume (responseBody res)
-  let Just info = parseGalleryInfo . BSL.fromChunks $ bss
-  return info
+progressBar :: MVar Progress -> IO ()
+progressBar mp = do
+  Progress t x r <- takeMVar mp
+  Just (TS.Window h w) <- TS.size
+  let n = x * (w-2) `div` t
+  putStr "\r["
+  putStr $ replicate n '#'
+  putStr $ replicate (w-n-2) ' '
+  putChar ']'
+  if t == x then do
+    putChar '\n'
+    hFlush stdout
+  else do
+    hFlush stdout
+    progressBar mp
 
-downloadGallery :: GalleryId -> HatomiManager -> IO ()
-downloadGallery gid man = do
+downloadHitomiGallery :: GalleryId -> HatomiManager -> IO ()
+downloadHitomiGallery gid man = do
   putStrLn ("Downloading " ++ show gid)
   let galleryDirectory = hatomiDirectory man ++ "/" ++ show gid
   createDirectoryIfMissing True galleryDirectory
-  info <- fetchGalleryInfo gid man readGalleryInfo
-  let imgNum = length (Hitomi._files info)
-  iforM_ (Hitomi._files info) $ \i imginfo -> do
-    putStrLn ("[" ++ show (i+1) ++ " of " ++ show imgNum ++ "]")
+
+  let manager = connectionManager man
+  ginfo <- downloadGalleryInfo @Hitomi gid (\req -> responseBody <$> httpLbs req manager)
+  let iinfos = imageInfos ginfo
+      n = length iinfos
+  iforM_ iinfos $ \i iinfo -> do
+    putStrLn ("[" ++ show (i+1) ++ " of " ++ show n ++ "]")
     mp <- newEmptyMVar
-    aimg <- async $ fetchGalleryImage info imginfo man (readGalleryImage mp)
+    aimg <- async $ downloadGalleryImage ginfo iinfo (\req -> withResponse req manager $ readGalleryImage mp)
     progressBar mp
     img <- wait aimg
-    BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hitomi.name) imginfo) img
-  where
-    progressBar :: MVar Progress -> IO ()
-    progressBar mp = do
-      Progress t x r <- takeMVar mp
-      Just (TS.Window h w) <- TS.size
-      let n = x * (w-2) `div` t
-      putStr "\r["
-      putStr $ replicate n '#'
-      putStr $ replicate (w-n-2) ' '
-      putChar ']'
-      if t == x then do
-        putChar '\n'
-        hFlush stdout
-      else do
-        hFlush stdout
-        progressBar mp
+    BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hatomi.name . toHatomiImageInfo) iinfo) img
 
 main :: IO ()
 main = flip runContT pure . callCC $ \k ->
@@ -124,4 +121,4 @@ main = flip runContT pure . callCC $ \k ->
     manager <- newManager tlsManagerSettings
     let man = HatomiManager (homeDir ++ "/hatomi") manager
         gid = read (args !! 0) 
-    downloadGallery gid man 
+    downloadHitomiGallery gid man 
