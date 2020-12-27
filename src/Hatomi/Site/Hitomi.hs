@@ -16,6 +16,9 @@ import Network.HTTP.Client
 
 import Control.Applicative
 
+import Text.HTML.Parser
+import Text.HTML.Tree
+
 import qualified Hatomi as Hatomi
 import Hatomi (GalleryId)
 import Hatomi.Site

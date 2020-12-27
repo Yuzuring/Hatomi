@@ -9,6 +9,7 @@ let
     async
     ilist
     unordered-containers
+    attoparsec
   ];
   ghc = pkgs.ghc.withPackages haskellPackages;
 in
