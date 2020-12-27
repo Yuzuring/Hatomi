@@ -57,8 +57,6 @@ type AttrValue = Text
 data Token
   -- | An opening tag. Attribute ordering is arbitrary.
   = TagOpen !TagName [Attr]
-  -- | A self-closing tag.
-  | TagSelfClose !TagName [Attr]
   -- | A closing tag.
   | TagClose !TagName
   -- | The content between tags.
@@ -155,7 +153,7 @@ tagName' = do
 -- | /§8.2.4.40/: Self-closing start tag state
 selfClosingStartTag :: TagName -> [Attr] -> Parser Token
 selfClosingStartTag tag attrs = do
-        (char '>' >> return (TagSelfClose tag attrs))
+        (char '>' >> return (TagOpen tag attrs))
     <|> (endOfInput >> return endOfFileToken)
     <|> beforeAttrName tag attrs
 
@@ -374,7 +372,6 @@ renderToken :: Token -> TL.Text
 renderToken = TL.fromStrict . mconcat . \case
     (TagOpen n [])         -> ["<", n, ">"]
     (TagOpen n attrs)      -> ["<", n, " ", renderAttrs attrs, ">"]
-    (TagSelfClose n attrs) -> ["<", n, " ", renderAttrs attrs, " />"]
     (TagClose n)           -> ["</", n, ">"]
     (ContentChar c)        -> [T.singleton c]
     (ContentText t)        -> [t]

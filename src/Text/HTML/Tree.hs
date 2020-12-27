@@ -18,6 +18,7 @@ import           Data.Text (Text)
 import           Data.Tree
 import           Text.HTML.Parser
 
+import Data.HashSet
 
 tokensToForest :: [Token] -> Either ParseTokenForestError (Forest Token)
 tokensToForest = f (PStack [] [])
@@ -25,18 +26,20 @@ tokensToForest = f (PStack [] [])
     f (PStack ss []) [] = Right (reverse ss)
     f pstack []         = Left $ ParseTokenForestErrorBracketMismatch pstack Nothing
     f pstack (t : ts)   = case t of
-        TagOpen n _     -> if n `elem` nonClosing
+        TagOpen n _     -> if n `member` nonClosing
                              then f (pushFlatSibling t pstack) ts
                              else f (pushParent t pstack) ts
-        TagSelfClose {} -> f (pushFlatSibling t pstack) ts
         TagClose n      -> (`f` ts) =<< popParent n pstack
         ContentChar _   -> f (pushFlatSibling t pstack) ts
         ContentText _   -> f (pushFlatSibling t pstack) ts
         Comment _       -> f (pushFlatSibling t pstack) ts
         Doctype _       -> f (pushFlatSibling t pstack) ts
 
-nonClosing :: [Text]
-nonClosing = ["br", "hr", "img"]
+nonClosing :: HashSet Text
+nonClosing = fromList
+  [ "area",  "base", "br",   "col",   "embed",  "hr",    "img"
+  , "input", "link", "meta", "param", "source", "track", "wbr"
+  ]
 
 data ParseTokenForestError =
     ParseTokenForestErrorBracketMismatch PStack (Maybe Token)
