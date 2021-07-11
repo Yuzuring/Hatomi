@@ -45,6 +45,7 @@ data Tag = Male     T.Text
 data GalleryInfo = GalleryInfo
   { _id         :: GalleryId
   , _title      :: T.Text
+  , _artists    :: [T.Text]
   , _group      :: T.Text
   , _type       :: GalleryType
   , _language   :: T.Text
@@ -117,6 +118,7 @@ instance FromJSON GalleryInfo where
     GalleryInfo
     <$> v .: "id"
     <*> v .: "title"
+    <*> v .: "artists"
     <*> v .: "group"
     <*> v .: "type"
     <*> v .: "language"

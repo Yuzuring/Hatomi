@@ -32,6 +32,9 @@ import Hatomi
 import Hatomi.Site
 import Hatomi.Site.Hitomi (Hitomi)
 
+proxySetting :: Maybe Proxy
+proxySetting = Nothing
+
 data Progress = Progress
   { total :: !Int     -- total size       (bytes)
   , done  :: !Int     -- downloaded size  (bytes)
@@ -91,13 +94,13 @@ downloadHitomiGallery gid man = do
   createDirectoryIfMissing True galleryDirectory
 
   let manager = connectionManager man
-  ginfo <- downloadGalleryInfo @Hitomi gid (\req -> responseBody <$> httpLbs req manager)
+  ginfo <- downloadGalleryInfo @Hitomi gid (\req -> responseBody <$> httpLbs (req {proxy=proxySetting}) manager)
   let iinfos = imageInfos ginfo
       n = length iinfos
   iforM_ iinfos $ \i iinfo -> do
     putStrLn ("[" ++ show (i+1) ++ " of " ++ show n ++ "]")
     mp <- newEmptyMVar
-    aimg <- async $ downloadGalleryImage ginfo iinfo (\req -> withResponse req manager $ readGalleryImage mp)
+    aimg <- async $ downloadGalleryImage ginfo iinfo (\req -> withResponse (req {proxy=proxySetting}) manager $ readGalleryImage mp)
     progressBar mp
     img <- wait aimg
     BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hatomi.name . toHatomiImageInfo) iinfo) img
@@ -122,6 +125,6 @@ main = flip runContT pure . callCC $ \k ->
   
   liftIO $ do
     manager <- newManager tlsManagerSettings
-    let man = HatomiManager (homeDir ++ "/hatomi") manager
-        gid = read (head args) 
-    downloadHitomiGallery gid man 
+    let man = HatomiManager (homeDir ++ "/.hatomi") manager
+        gids = map read args
+    forM_ gids $ \gid -> downloadHitomiGallery gid man

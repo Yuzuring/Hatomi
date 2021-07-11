@@ -108,6 +108,7 @@ instance Site Hitomi where
     Hatomi.GalleryInfo
     { Hatomi._id          = _id x
     , Hatomi._title       = _title x
+    , Hatomi._artists     = []
     , Hatomi._group       = ""
     , Hatomi._type        = findWithDefault Hatomi.Misc (_type x) Hatomi.galleryTypeMap
     , Hatomi._language    = _language x
@@ -159,3 +160,7 @@ parseGalleryInfo = decode' . BSL.tail . BSL.dropWhile (/=c)
   where
     c = fromIntegral $ ord '='
 
+-- parseTokens :: Text -> [Token]
+-- tokensToForest :: [Token] -> Either ParseTokenForestError (Forest Token)
+
+-- parseGalleryBlock :: BSL.ByteString -> Maybe GalleryBlock
