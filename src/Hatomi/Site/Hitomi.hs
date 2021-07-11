@@ -140,20 +140,18 @@ galleryIntroUrl GalleryInfo{_id=gid, _title=gtitle, _type=gtype, _language_local
 galleryImageUrl :: ImageInfo Hitomi -> String
 galleryImageUrl ImageInfo{name=name, hash=hash}
   | [x,y,z] <- T.unpack . T.takeEnd 3 $ hash
-    = sub x y:"" ++ "b.hitomi.la/images/" ++ z:'/':x:y:"/" ++ T.unpack hash ++ "." ++ ext
+    = sub x y ++ ".hitomi.la/images/" ++ [z, '/', x, y, '/'] ++ T.unpack hash ++ "." ++ ext
   | otherwise = ""
   where
     ext = T.unpack . last . T.splitOn "." $ name
-    sub x y = if g < 0x09
-      then chr (ord 'a' + 1 `mod` d)
-      else chr (ord 'a' + g `mod` d)
+    hex c
+      | '0' <= c && c <= '9' = ord c - ord '0'
+      | 'a' <= c && c <= 'z' = ord c - ord 'a' + 16
+      | otherwise            = 0
+    sub x y = [chr (ord 'a' + o), 'b']
       where
-        hex c
-          | '0' <= c && c <= '9' = ord c - ord '0'
-          | 'a' <= c && c <= 'z' = ord c - ord 'a' + 16
-          | otherwise            = 0
         g = hex x * 16 + hex y
-        d = if g < 0x30 then 2 else 3
+        o = if g < 0x40 then 2 else if g < 0x80 then 1 else 0
 
 parseGalleryInfo :: BSL.ByteString -> Maybe (GalleryInfo Hitomi)
 parseGalleryInfo = decode' . BSL.tail . BSL.dropWhile (/=c)
