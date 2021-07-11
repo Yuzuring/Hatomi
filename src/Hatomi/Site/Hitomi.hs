@@ -95,11 +95,11 @@ instance Site Hitomi where
     pure x
 
   downloadGalleryImage ginfo iinfo fetch = do
-      _req <- parseRequest $ "https://" ++ galleryImageUrl iinfo
-      let req = _req { requestHeaders = headers
-                     , responseTimeout = responseTimeoutMicro 60000000
-                     }
-      fetch req
+    _req <- parseRequest $ "https://" ++ galleryImageUrl iinfo
+    let req = _req { requestHeaders = headers
+                   , responseTimeout = responseTimeoutMicro 60000000
+                   }
+    fetch req
     where
       headers = [("Referer", fromString $ "https://" ++ galleryIntroUrl ginfo)]
 
@@ -146,7 +146,7 @@ galleryImageUrl ImageInfo{name=name, hash=hash}
     ext = T.unpack . last . T.splitOn "." $ name
     hex c
       | '0' <= c && c <= '9' = ord c - ord '0'
-      | 'a' <= c && c <= 'z' = ord c - ord 'a' + 16
+      | 'a' <= c && c <= 'z' = ord c - ord 'a' + 10
       | otherwise            = 0
     sub x y = [chr (ord 'a' + o), 'b']
       where
