@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Main where
 
@@ -31,6 +32,7 @@ import Control.Concurrent.Async
 import Hatomi
 import Hatomi.Site
 import Hatomi.Site.Hitomi (Hitomi)
+import qualified Hatomi.Site.Hitomi as Hitomi
 
 proxySetting :: Maybe Proxy
 proxySetting = Nothing
@@ -87,6 +89,36 @@ progressBar mp = do
     hFlush stdout
     progressBar mp
 
+downloadHitomiGallery' :: GalleryId -> HatomiManager -> IO ()
+downloadHitomiGallery' gid man = do
+  putStrLn ("Downloading " ++ show gid)
+  let galleryDirectory = hatomiDirectory man ++ "/" ++ show gid
+  createDirectoryIfMissing True galleryDirectory
+
+  let manager = connectionManager man
+  ginfo <- downloadGalleryInfo @Hitomi gid (\req -> responseBody <$> httpLbs (req {proxy=proxySetting}) manager)
+  let iinfos = imageInfos ginfo
+      n = length iinfos
+
+  let
+    waitDownload :: Int -> Int -> [Hatomi.Site.ImageInfo Hitomi] -> [Async (Hatomi.Site.ImageInfo Hitomi, BSL.ByteString)] -> Int -> IO ()
+    waitDownload i s iinfos ws m = do
+      (w, (iinfo, img)) <- waitAny ws
+      BSL.writeFile (galleryDirectory ++ "/" ++ (T.unpack . Hatomi.name . toHatomiImageInfo) iinfo) img
+      collect i (s + 1) iinfos (filter (/=w) ws) (m + 1)
+
+    collect :: Int -> Int -> [Hatomi.Site.ImageInfo Hitomi] -> [Async (Hatomi.Site.ImageInfo Hitomi, BSL.ByteString)] -> Int -> IO ()
+    collect i s []     [] m = pure ()
+    collect i 0 iinfos ws m = waitDownload i 0 iinfos ws m
+    collect i s []     ws m = waitDownload i s []     ws m
+    collect i s (iinfo:iinfos) ws m = do
+      putStrLn (T.unpack (Hitomi.name iinfo) ++ " [" ++ show (i+1) ++ " of " ++ show n ++ "]")
+      aimg <- async $ (iinfo,) <$> downloadGalleryImage ginfo iinfo (\req -> responseBody <$> httpLbs (req {proxy=proxySetting}) manager)
+      collect (i+1) (s - 1) iinfos (aimg:ws) m
+  collect 0 10 iinfos [] 0
+  BSL.writeFile (galleryDirectory ++ "/meta.json") (encode $ toHatomiGalleryInfo ginfo)
+  putChar '\n'
+
 downloadHitomiGallery :: GalleryId -> HatomiManager -> IO ()
 downloadHitomiGallery gid man = do
   putStrLn ("Downloading " ++ show gid)
@@ -127,4 +159,5 @@ main = flip runContT pure . callCC $ \k ->
     manager <- newManager tlsManagerSettings
     let man = HatomiManager (homeDir ++ "/.hatomi") manager
         gids = map read args
-    forM_ gids $ \gid -> downloadHitomiGallery gid man
+    -- forM_ gids $ \gid -> downloadHitomiGallery gid man
+    forM_ gids $ \gid -> downloadHitomiGallery' gid man
